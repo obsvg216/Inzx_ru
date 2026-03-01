@@ -975,9 +975,7 @@ class _JamsScreenState extends ConsumerState<JamsScreen> {
     if (!mounted) return;
     if (!success) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Could not join session. Check the code.'),
-        ),
+        const SnackBar(content: Text('No jam found for this code.')),
       );
     }
   }
