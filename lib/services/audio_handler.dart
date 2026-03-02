@@ -51,7 +51,12 @@ class InzxAudioHandler extends BaseAudioHandler with SeekHandler {
         _updateQueue(state.queue);
       }
 
-      unawaited(WidgetSyncService.syncPlaybackState(state));
+      unawaited(
+        WidgetSyncService.syncPlaybackState(
+          state,
+          statusLabel: _playerService.isJamsModeEnabled ? 'INZX JAM' : null,
+        ),
+      );
     });
 
     // Separate position stream for system UI updates (more frequent)

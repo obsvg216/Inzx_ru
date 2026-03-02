@@ -11,7 +11,10 @@ class WidgetSyncService {
   static String? _lastProgressFingerprint;
   static String? _lastArtworkTrackId;
 
-  static Future<void> syncPlaybackState(player.PlaybackState state) async {
+  static Future<void> syncPlaybackState(
+    player.PlaybackState state, {
+    String? statusLabel,
+  }) async {
     final track = state.currentTrack;
     final hasTrack = track != null;
     final effectiveDuration =
@@ -26,8 +29,14 @@ class WidgetSyncService {
       'positionMs': state.position.inMilliseconds,
       'durationMs': effectiveDuration.inMilliseconds,
     };
+    payload['statusLabel'] = statusLabel?.trim() ?? '';
 
-    final fingerprint = _fingerprintFrom(track, state.isPlaying, hasTrack);
+    final fingerprint = _fingerprintFrom(
+      track,
+      state.isPlaying,
+      hasTrack,
+      statusLabel,
+    );
     if (_lastFingerprint == fingerprint) return;
     _lastFingerprint = fingerprint;
 
@@ -81,11 +90,17 @@ class WidgetSyncService {
     }
   }
 
-  static String _fingerprintFrom(Track? track, bool isPlaying, bool hasTrack) {
+  static String _fingerprintFrom(
+    Track? track,
+    bool isPlaying,
+    bool hasTrack,
+    String? statusLabel,
+  ) {
     final id = track?.id ?? '';
     final title = track?.title ?? '';
     final artist = track?.artist ?? '';
-    return '$id|$title|$artist|$isPlaying|$hasTrack';
+    final status = statusLabel ?? '';
+    return '$id|$title|$artist|$isPlaying|$hasTrack|$status';
   }
 
   static Future<Uint8List?> _downloadArtworkBytes(String url) async {

@@ -1,6 +1,8 @@
 package com.nirmal.inzx.widget
 
 import android.app.PendingIntent
+import android.media.AudioDeviceInfo
+import android.media.AudioManager
 import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProvider
 import android.content.ComponentName
@@ -10,17 +12,20 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Color
+import android.os.Build
+import android.os.Bundle
 import android.widget.RemoteViews
 import androidx.core.content.ContextCompat
 import com.nirmal.inzx.MainActivity
 import com.nirmal.inzx.R
 import java.io.File
 import java.io.FileOutputStream
+import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
 
-class MusicWidgetProvider : AppWidgetProvider() {
+open class MusicWidgetProvider : AppWidgetProvider() {
     override fun onUpdate(
         context: Context,
         appWidgetManager: AppWidgetManager,
@@ -30,6 +35,16 @@ class MusicWidgetProvider : AppWidgetProvider() {
         appWidgetIds.forEach { appWidgetId ->
             updateWidget(context, appWidgetManager, appWidgetId)
         }
+    }
+
+    override fun onAppWidgetOptionsChanged(
+        context: Context,
+        appWidgetManager: AppWidgetManager,
+        appWidgetId: Int,
+        newOptions: Bundle
+    ) {
+        super.onAppWidgetOptionsChanged(context, appWidgetManager, appWidgetId, newOptions)
+        updateWidget(context, appWidgetManager, appWidgetId)
     }
 
     override fun onReceive(context: Context, intent: Intent) {
@@ -50,7 +65,10 @@ class MusicWidgetProvider : AppWidgetProvider() {
         private const val KEY_DURATION_MS = "duration_ms"
         private const val KEY_ARTWORK_PATH = "artwork_path"
         private const val KEY_ACCENT_COLOR = "accent_color"
+        private const val KEY_STATUS_LABEL = "status_label"
         private const val DEFAULT_WIDGET_BG = "#E6121212"
+        private const val JAM_STATUS_LABEL = "INZX JAM"
+        private const val EXPANDED_MIN_HEIGHT_DP = 120
 
         const val ACTION_WIDGET_REFRESH = "com.nirmal.inzx.widget.REFRESH"
         const val ACTION_PREVIOUS = "com.nirmal.inzx.widget.PREVIOUS"
@@ -106,14 +124,23 @@ class MusicWidgetProvider : AppWidgetProvider() {
                     }
                 }
             }
+            if (args.containsKey("statusLabel")) {
+                val incomingStatus = (args["statusLabel"] as? String)?.trim()
+                if (incomingStatus.isNullOrEmpty()) {
+                    editor.remove(KEY_STATUS_LABEL)
+                } else {
+                    editor.putString(KEY_STATUS_LABEL, incomingStatus)
+                }
+            }
 
             editor.apply()
         }
 
         fun updateAllWidgets(context: Context) {
             val manager = AppWidgetManager.getInstance(context)
-            val component = ComponentName(context, MusicWidgetProvider::class.java)
-            val ids = manager.getAppWidgetIds(component)
+            val ids = linkedSetOf<Int>()
+            ids.addAll(manager.getAppWidgetIds(ComponentName(context, MusicWidgetProvider::class.java)).toList())
+            ids.addAll(manager.getAppWidgetIds(ComponentName(context, MusicWidgetLargeProvider::class.java)).toList())
             ids.forEach { appWidgetId ->
                 updateWidget(context, manager, appWidgetId)
             }
@@ -133,12 +160,15 @@ class MusicWidgetProvider : AppWidgetProvider() {
             val durationMs = prefs.getLong(KEY_DURATION_MS, 0L)
             val artworkPath = prefs.getString(KEY_ARTWORK_PATH, null)
             val accentColor = prefs.getInt(KEY_ACCENT_COLOR, Color.WHITE)
+            val storedStatusLabel = prefs.getString(KEY_STATUS_LABEL, null)
             val hasProgress = hasTrack && durationMs > 0L
             val progress = if (hasProgress) {
                 ((positionMs.coerceIn(0L, durationMs) * 1000L) / durationMs).toInt()
             } else {
                 0
             }
+            val currentTimeText = formatDuration(positionMs)
+            val totalTimeText = formatDuration(durationMs)
             val iconColor = if (hasTrack) accentColor else Color.parseColor("#DDFFFFFF")
             val titleColor = if (hasTrack) blendColors(accentColor, Color.WHITE, 0.35f) else Color.WHITE
             val widgetBackgroundColor = if (hasTrack) {
@@ -146,13 +176,20 @@ class MusicWidgetProvider : AppWidgetProvider() {
             } else {
                 Color.parseColor(DEFAULT_WIDGET_BG)
             }
+            val statusIconResId = resolveStatusIconResId(context, storedStatusLabel)
+            val useExpandedLayout = shouldUseExpandedLayout(appWidgetManager, appWidgetId)
 
-            val views = RemoteViews(context.packageName, R.layout.music_widget).apply {
+            val layoutId = if (useExpandedLayout) R.layout.music_widget_expanded else R.layout.music_widget
+            val views = RemoteViews(context.packageName, layoutId).apply {
                 setTextViewText(R.id.widget_track_title, title)
                 setTextViewText(R.id.widget_track_artist, artist)
                 setTextColor(R.id.widget_track_title, titleColor)
                 setTextColor(R.id.widget_track_artist, withAlpha(Color.WHITE, 204))
                 setInt(R.id.widget_bg_tint, "setBackgroundColor", widgetBackgroundColor)
+                setTextViewText(R.id.widget_time_current, currentTimeText)
+                setTextViewText(R.id.widget_time_total, totalTimeText)
+                setTextColor(R.id.widget_time_current, withAlpha(Color.WHITE, 204))
+                setTextColor(R.id.widget_time_total, withAlpha(Color.WHITE, 204))
 
                 val launchIntent = Intent(context, MainActivity::class.java)
                 val launchPendingIntent = PendingIntent.getActivity(
@@ -185,6 +222,14 @@ class MusicWidgetProvider : AppWidgetProvider() {
                     R.id.widget_progress,
                     if (hasProgress) android.view.View.VISIBLE else android.view.View.GONE
                 )
+                setViewVisibility(
+                    R.id.widget_time_row,
+                    if (hasProgress) android.view.View.VISIBLE else android.view.View.GONE
+                )
+
+                if (useExpandedLayout) {
+                    setImageViewResource(R.id.widget_app_logo, R.mipmap.ic_launcher)
+                }
             }
 
             setTintedControlIcons(
@@ -193,6 +238,14 @@ class MusicWidgetProvider : AppWidgetProvider() {
                 isPlaying = isPlaying,
                 iconColor = iconColor
             )
+            if (useExpandedLayout) {
+                setTintedStatusIcon(
+                    context = context,
+                    views = views,
+                    iconResId = statusIconResId,
+                    iconColor = withAlpha(Color.WHITE, 230)
+                )
+            }
 
             val artwork = loadArtwork(artworkPath)
             if (artwork != null) {
@@ -202,6 +255,69 @@ class MusicWidgetProvider : AppWidgetProvider() {
             }
 
             appWidgetManager.updateAppWidget(appWidgetId, views)
+        }
+
+        private fun shouldUseExpandedLayout(
+            appWidgetManager: AppWidgetManager,
+            appWidgetId: Int
+        ): Boolean {
+            val info = appWidgetManager.getAppWidgetInfo(appWidgetId)
+            if (info?.provider?.className == MusicWidgetLargeProvider::class.java.name) {
+                return true
+            }
+            val options = appWidgetManager.getAppWidgetOptions(appWidgetId)
+            val minHeight = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 0)
+            return minHeight >= EXPANDED_MIN_HEIGHT_DP
+        }
+
+        private fun resolveStatusIconResId(context: Context, storedStatusLabel: String?): Int {
+            if (storedStatusLabel?.equals(JAM_STATUS_LABEL, ignoreCase = true) == true) {
+                return R.drawable.ic_notification
+            }
+
+            val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+                ?: return android.R.drawable.sym_action_call
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                val devices = audioManager.getDevices(AudioManager.GET_DEVICES_OUTPUTS)
+                if (devices.any { isBluetoothOutput(it) }) return android.R.drawable.stat_sys_data_bluetooth
+                if (devices.any { isWiredOutput(it) }) return android.R.drawable.ic_lock_silent_mode_off
+                if (devices.any { isUsbOutput(it) }) return android.R.drawable.ic_menu_manage
+                if (devices.any { isExternalOutput(it) }) return android.R.drawable.ic_menu_slideshow
+                return android.R.drawable.sym_action_call
+            }
+
+            return when {
+                audioManager.isBluetoothA2dpOn || audioManager.isBluetoothScoOn -> {
+                    android.R.drawable.stat_sys_data_bluetooth
+                }
+                audioManager.isWiredHeadsetOn -> android.R.drawable.ic_lock_silent_mode_off
+                else -> android.R.drawable.sym_action_call
+            }
+        }
+
+        private fun isBluetoothOutput(device: AudioDeviceInfo): Boolean {
+            return device.type == AudioDeviceInfo.TYPE_BLUETOOTH_A2DP ||
+                device.type == AudioDeviceInfo.TYPE_BLUETOOTH_SCO
+        }
+
+        private fun isWiredOutput(device: AudioDeviceInfo): Boolean {
+            return device.type == AudioDeviceInfo.TYPE_WIRED_HEADPHONES ||
+                device.type == AudioDeviceInfo.TYPE_WIRED_HEADSET ||
+                device.type == AudioDeviceInfo.TYPE_LINE_ANALOG ||
+                device.type == AudioDeviceInfo.TYPE_LINE_DIGITAL
+        }
+
+        private fun isUsbOutput(device: AudioDeviceInfo): Boolean {
+            return device.type == AudioDeviceInfo.TYPE_USB_DEVICE ||
+                device.type == AudioDeviceInfo.TYPE_USB_ACCESSORY ||
+                device.type == AudioDeviceInfo.TYPE_USB_HEADSET
+        }
+
+        private fun isExternalOutput(device: AudioDeviceInfo): Boolean {
+            return device.type == AudioDeviceInfo.TYPE_HDMI ||
+                device.type == AudioDeviceInfo.TYPE_HDMI_ARC ||
+                device.type == AudioDeviceInfo.TYPE_HDMI_EARC
         }
 
         private fun actionPendingIntent(
@@ -323,6 +439,19 @@ class MusicWidgetProvider : AppWidgetProvider() {
             return Color.rgb(r, g, b)
         }
 
+        private fun formatDuration(durationMs: Long): String {
+            val totalSeconds = (durationMs / 1000L).coerceAtLeast(0L)
+            val hours = totalSeconds / 3600L
+            val minutes = (totalSeconds % 3600L) / 60L
+            val seconds = totalSeconds % 60L
+
+            return if (hours > 0L) {
+                String.format(Locale.US, "%d:%02d:%02d", hours, minutes, seconds)
+            } else {
+                String.format(Locale.US, "%d:%02d", minutes, seconds)
+            }
+        }
+
         private fun setTintedControlIcons(
             context: Context,
             views: RemoteViews,
@@ -340,6 +469,18 @@ class MusicWidgetProvider : AppWidgetProvider() {
             if (prev != null) views.setImageViewBitmap(R.id.widget_btn_previous, prev)
             if (playPause != null) views.setImageViewBitmap(R.id.widget_btn_play_pause, playPause)
             if (next != null) views.setImageViewBitmap(R.id.widget_btn_next, next)
+        }
+
+        private fun setTintedStatusIcon(
+            context: Context,
+            views: RemoteViews,
+            iconResId: Int,
+            iconColor: Int
+        ) {
+            val status = tintedSystemIconBitmap(context, iconResId, iconColor)
+            if (status != null) {
+                views.setImageViewBitmap(R.id.widget_status_icon, status)
+            }
         }
 
         private fun tintedSystemIconBitmap(
