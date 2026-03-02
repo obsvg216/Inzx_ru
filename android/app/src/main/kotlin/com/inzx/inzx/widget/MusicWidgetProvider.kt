@@ -281,8 +281,8 @@ open class MusicWidgetProvider : AppWidgetProvider() {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                 val devices = audioManager.getDevices(AudioManager.GET_DEVICES_OUTPUTS)
                 if (devices.any { isBluetoothOutput(it) }) return android.R.drawable.stat_sys_data_bluetooth
-                if (devices.any { isWiredOutput(it) }) return android.R.drawable.ic_lock_silent_mode_off
-                if (devices.any { isUsbOutput(it) }) return android.R.drawable.ic_menu_manage
+                if (devices.any { isWiredOutput(it) }) return android.R.drawable.stat_sys_headset
+                if (devices.any { isUsbOutput(it) }) return android.R.drawable.stat_sys_headset
                 if (devices.any { isExternalOutput(it) }) return android.R.drawable.ic_menu_slideshow
                 return android.R.drawable.sym_action_call
             }
@@ -291,7 +291,7 @@ open class MusicWidgetProvider : AppWidgetProvider() {
                 audioManager.isBluetoothA2dpOn || audioManager.isBluetoothScoOn -> {
                     android.R.drawable.stat_sys_data_bluetooth
                 }
-                audioManager.isWiredHeadsetOn -> android.R.drawable.ic_lock_silent_mode_off
+                audioManager.isWiredHeadsetOn -> android.R.drawable.stat_sys_headset
                 else -> android.R.drawable.sym_action_call
             }
         }
@@ -304,14 +304,14 @@ open class MusicWidgetProvider : AppWidgetProvider() {
         private fun isWiredOutput(device: AudioDeviceInfo): Boolean {
             return device.type == AudioDeviceInfo.TYPE_WIRED_HEADPHONES ||
                 device.type == AudioDeviceInfo.TYPE_WIRED_HEADSET ||
+                device.type == AudioDeviceInfo.TYPE_USB_HEADSET ||
                 device.type == AudioDeviceInfo.TYPE_LINE_ANALOG ||
                 device.type == AudioDeviceInfo.TYPE_LINE_DIGITAL
         }
 
         private fun isUsbOutput(device: AudioDeviceInfo): Boolean {
             return device.type == AudioDeviceInfo.TYPE_USB_DEVICE ||
-                device.type == AudioDeviceInfo.TYPE_USB_ACCESSORY ||
-                device.type == AudioDeviceInfo.TYPE_USB_HEADSET
+                device.type == AudioDeviceInfo.TYPE_USB_ACCESSORY
         }
 
         private fun isExternalOutput(device: AudioDeviceInfo): Boolean {
