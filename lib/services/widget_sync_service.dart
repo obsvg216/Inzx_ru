@@ -1,4 +1,5 @@
 import 'package:flutter/services.dart';
+import 'package:http/http.dart' as http;
 import '../models/models.dart';
 import 'audio_player_service.dart' as player;
 
@@ -8,10 +9,13 @@ class WidgetSyncService {
 
   static String? _lastFingerprint;
   static String? _lastProgressFingerprint;
+  static String? _lastArtworkTrackId;
 
   static Future<void> syncPlaybackState(player.PlaybackState state) async {
     final track = state.currentTrack;
     final hasTrack = track != null;
+    final effectiveDuration =
+        state.duration ?? track?.duration ?? Duration.zero;
 
     final payload = <String, dynamic>{
       'trackId': track?.id,
@@ -20,12 +24,23 @@ class WidgetSyncService {
       'isPlaying': state.isPlaying,
       'hasTrack': hasTrack,
       'positionMs': state.position.inMilliseconds,
-      'durationMs': (state.duration ?? Duration.zero).inMilliseconds,
+      'durationMs': effectiveDuration.inMilliseconds,
     };
 
     final fingerprint = _fingerprintFrom(track, state.isPlaying, hasTrack);
     if (_lastFingerprint == fingerprint) return;
     _lastFingerprint = fingerprint;
+
+    if (track?.id != _lastArtworkTrackId) {
+      _lastArtworkTrackId = track?.id;
+      final thumbnail = track?.bestThumbnail;
+      if (thumbnail != null && thumbnail.isNotEmpty) {
+        final artBytes = await _downloadArtworkBytes(thumbnail);
+        if (artBytes != null && artBytes.isNotEmpty) {
+          payload['artBytes'] = artBytes;
+        }
+      }
+    }
 
     try {
       await _channel.invokeMethod('syncPlaybackState', payload);
@@ -45,7 +60,8 @@ class WidgetSyncService {
 
     // Widget progress updates are throttled to 1-second buckets.
     final secondBucket = position.inSeconds;
-    final durationMs = (duration ?? Duration.zero).inMilliseconds;
+    final durationMs =
+        (duration ?? track?.duration ?? Duration.zero).inMilliseconds;
     final progressFingerprint =
         '${track?.id ?? ''}|$secondBucket|$durationMs|$isPlaying';
     if (_lastProgressFingerprint == progressFingerprint) return;
@@ -70,5 +86,20 @@ class WidgetSyncService {
     final title = track?.title ?? '';
     final artist = track?.artist ?? '';
     return '$id|$title|$artist|$isPlaying|$hasTrack';
+  }
+
+  static Future<Uint8List?> _downloadArtworkBytes(String url) async {
+    try {
+      final uri = Uri.tryParse(url);
+      if (uri == null) return null;
+      final response = await http
+          .get(uri, headers: {'User-Agent': 'InzxWidget/1.0'})
+          .timeout(const Duration(seconds: 6));
+      if (response.statusCode != 200) return null;
+      if (response.bodyBytes.isEmpty) return null;
+      return response.bodyBytes;
+    } catch (_) {
+      return null;
+    }
   }
 }
