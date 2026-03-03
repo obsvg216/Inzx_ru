@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'core/design_system/design_system.dart';
 import 'core/providers/theme_provider.dart';
 import 'core/services/cache/hive_service.dart';
 import 'services/audio_handler.dart';
+import 'services/github_release_update_service.dart';
 import 'services/jams/jams_background_service_native.dart';
 import 'services/notification_service.dart';
 import 'services/shorebird_update_service.dart';
@@ -100,16 +102,28 @@ class _InzxAppState extends ConsumerState<InzxApp> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final cacheWarmer = ref.read(cacheWarmingServiceProvider);
       cacheWarmer.warmCache(preTrendingMusic: true, prelikedSongs: true);
-      // ignore: unawaited_futures
-      ShorebirdUpdateService.instance.checkForUpdates().then((didUpdate) {
-        if (didUpdate) {
-          _showUpdateBanner();
-        }
-      });
+      _runUpdateChecks();
     });
   }
 
-  void _showUpdateBanner() {
+  Future<void> _runUpdateChecks() async {
+    final didPatchUpdate = await ShorebirdUpdateService.instance
+        .checkForUpdates();
+    if (!mounted) return;
+
+    if (didPatchUpdate) {
+      _showPatchUpdateBanner();
+      return;
+    }
+
+    final releaseInfo = await GithubReleaseUpdateService.instance
+        .checkForNewRelease();
+    if (!mounted || releaseInfo == null) return;
+
+    _showNewReleaseBanner(releaseInfo);
+  }
+
+  void _showPatchUpdateBanner() {
     final messenger = rootScaffoldMessengerKey.currentState;
     if (messenger == null) return;
     messenger.clearMaterialBanners();
@@ -127,6 +141,33 @@ class _InzxAppState extends ConsumerState<InzxApp> {
           TextButton(
             onPressed: () => messenger.hideCurrentMaterialBanner(),
             child: const Text('Dismiss'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showNewReleaseBanner(GithubReleaseInfo releaseInfo) {
+    final messenger = rootScaffoldMessengerKey.currentState;
+    if (messenger == null) return;
+
+    messenger.clearMaterialBanners();
+    messenger.showMaterialBanner(
+      MaterialBanner(
+        content: Text(
+          'New version ${releaseInfo.latestVersion} is available on GitHub.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () async {
+              final uri = Uri.parse(releaseInfo.downloadUrl);
+              await launchUrl(uri, mode: LaunchMode.externalApplication);
+            },
+            child: const Text('Download'),
+          ),
+          TextButton(
+            onPressed: () => messenger.hideCurrentMaterialBanner(),
+            child: const Text('Later'),
           ),
         ],
       ),

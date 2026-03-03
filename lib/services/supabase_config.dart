@@ -4,8 +4,13 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 /// Supabase configuration and initialization
 class SupabaseConfig {
-  // Supabase project credentials for Jams feature
-  static String get supabaseUrl => dotenv.env['SUPABASE_URL'] ?? '';
+  // Supabase project credentials for Jams feature.
+  // Prefer proxy URL when present, else fall back to direct project URL.
+  static String get supabaseUrl {
+    final proxyUrl = dotenv.env['SUPABASE_PROXY_URL']?.trim() ?? '';
+    if (proxyUrl.isNotEmpty) return proxyUrl;
+    return dotenv.env['SUPABASE_URL']?.trim() ?? '';
+  }
   static String get supabaseAnonKey => dotenv.env['SUPABASE_ANON_KEY'] ?? '';
 
   static bool _initialized = false;
