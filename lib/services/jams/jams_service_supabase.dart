@@ -34,6 +34,8 @@ class JamsService {
 
   // Presence state
   final Map<String, JamParticipant> _participants = {};
+  // Persist participant playback-control grants across presence disconnect/rejoin.
+  final Map<String, bool> _controlPermissions = {};
   final JamsBackgroundService _backgroundService =
       JamsBackgroundService.instance;
   Timer? _hostDisconnectTimer;
@@ -327,6 +329,7 @@ class JamsService {
       _isLeavingSession = false;
       _isJoinValidationPending = false;
       _resetReconnectState();
+      _controlPermissions.clear();
       _emitConnectionState(
         JamConnectionState.reconnecting(
           attempt: 0,
@@ -399,6 +402,7 @@ class JamsService {
       _isHost = false;
       _canControlPlayback = false;
       _participants.clear();
+      _controlPermissions.clear();
       _currentSession = null;
 
       await _joinChannel(_currentSessionCode!);
@@ -639,6 +643,7 @@ class JamsService {
     _isHost = false;
     _canControlPlayback = false;
     _participants.clear();
+    _controlPermissions.clear();
     _cancelHostDisconnectTimer();
     _cancelAllParticipantDisconnectTimers();
     _stateVersion = 0;
@@ -877,6 +882,7 @@ class JamsService {
         'stateVersion': _lastAppliedStateVersion,
         'reason': reason,
         'session': _currentSession!.toJson(),
+        'controlPermissions': _controlPermissions,
         'sentAt': DateTime.now().toIso8601String(),
       },
     );
@@ -952,6 +958,7 @@ class JamsService {
         payload: {
           'newHostId': newHostId,
           'newHostName': newHost.name,
+          'controlPermissions': _controlPermissions,
           'stateVersion': stateVersion,
         },
       );
@@ -978,6 +985,7 @@ class JamsService {
     if (!_isHost || _channel == null) return false;
 
     try {
+      _controlPermissions[participantId] = canControl;
       final stateVersion = _nextStateVersion();
       await _channel!.sendBroadcastMessage(
         event: 'permission_update',
@@ -1407,6 +1415,16 @@ class JamsService {
 
       final newHostId = payload['newHostId'] as String;
       final newHostName = payload['newHostName'] as String;
+      final permissionsRaw = payload['controlPermissions'];
+      if (permissionsRaw is Map) {
+        final parsedPermissions = <String, bool>{};
+        for (final entry in permissionsRaw.entries) {
+          if (entry.key is String && entry.value is bool) {
+            parsedPermissions[entry.key as String] = entry.value as bool;
+          }
+        }
+        _controlPermissions.addAll(parsedPermissions);
+      }
 
       final wasHost = _isHost;
 
@@ -1465,6 +1483,7 @@ class JamsService {
 
       final participantId = payload['participantId'] as String;
       final canControl = payload['canControlPlayback'] as bool? ?? false;
+      _controlPermissions[participantId] = canControl;
 
       // Check if this is for me
       if (participantId == oderId) {
@@ -1509,6 +1528,7 @@ class JamsService {
     _currentSession = null;
     _isHost = false;
     _participants.clear();
+    _controlPermissions.clear();
     _cancelHostDisconnectTimer();
     _cancelAllParticipantDisconnectTimers();
     _sessionController.add(null);
@@ -1561,6 +1581,15 @@ class JamsService {
 
     try {
       final snapshot = JamSession.fromJson(sessionJson);
+      final permissionsRaw = payload['controlPermissions'];
+      final snapshotPermissions = <String, bool>{};
+      if (permissionsRaw is Map) {
+        for (final entry in permissionsRaw.entries) {
+          if (entry.key is String && entry.value is bool) {
+            snapshotPermissions[entry.key as String] = entry.value as bool;
+          }
+        }
+      }
       final wasHost = _isHost;
       final wasCanControl = _canControlPlayback;
 
@@ -1570,6 +1599,14 @@ class JamsService {
       _participants
         ..clear()
         ..addEntries(snapshot.participants.map((p) => MapEntry(p.id, p)));
+      _controlPermissions
+        ..clear()
+        ..addEntries(
+          snapshot.participants.map(
+            (p) => MapEntry<String, bool>(p.id, p.canControlPlayback),
+          ),
+        );
+      _controlPermissions.addAll(snapshotPermissions);
       _cancelHostDisconnectTimer();
       _cancelAllParticipantDisconnectTimers();
 
@@ -1598,6 +1635,25 @@ class JamsService {
         print('JamsService: Failed to apply state snapshot: $e');
       }
     }
+  }
+
+  bool _resolveParticipantCanControl(String participantId) {
+    final fromPermissionMap = _controlPermissions[participantId];
+    if (fromPermissionMap != null) return fromPermissionMap;
+
+    final fromPresence = _participants[participantId]?.canControlPlayback;
+    if (fromPresence != null) return fromPresence;
+
+    final fromSession = _currentSession?.participants
+        .where((p) => p.id == participantId)
+        .firstOrNull
+        ?.canControlPlayback;
+    if (fromSession != null) return fromSession;
+
+    if (participantId == oderId) {
+      return _canControlPlayback;
+    }
+    return false;
   }
 
   void _handlePresenceSync() {
@@ -1652,11 +1708,13 @@ class JamsService {
     for (final singleState in presenceState) {
       for (final presence in singleState.presences) {
         final data = presence.payload;
+        final participantId = data['user_id'] as String;
         final participant = JamParticipant(
-          id: data['user_id'] as String,
+          id: participantId,
           name: data['user_name'] as String,
           photoUrl: data['photo_url'] as String?,
           isHost: data['is_host'] as bool? ?? false,
+          canControlPlayback: _resolveParticipantCanControl(participantId),
           joinedAt: DateTime.parse(data['joined_at'] as String),
         );
         newParticipants[participant.id] = participant;
@@ -1719,11 +1777,13 @@ class JamsService {
 
       for (final presence in newPresences) {
         final data = presence.payload;
+        final participantId = data['user_id'] as String;
         final participant = JamParticipant(
-          id: data['user_id'] as String,
+          id: participantId,
           name: data['user_name'] as String,
           photoUrl: data['photo_url'] as String?,
           isHost: data['is_host'] as bool? ?? false,
+          canControlPlayback: _resolveParticipantCanControl(participantId),
           joinedAt: DateTime.parse(data['joined_at'] as String),
         );
         _participants[participant.id] = participant;
@@ -1860,6 +1920,7 @@ class JamsService {
     leaveSession();
     _cancelHostDisconnectTimer();
     _cancelAllParticipantDisconnectTimers();
+    _controlPermissions.clear();
     _sessionController.close();
     _playbackController.close();
     _errorController.close();
