@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../../../core/design_system/design_system.dart';
 import '../../providers/providers.dart';
+import '../../providers/bookmarks_and_stats_provider.dart';
 import '../../models/models.dart';
 import '../../services/download_service.dart';
 import '../widgets/playlist_screen.dart';
@@ -156,6 +157,7 @@ class _MusicLibraryTabState extends ConsumerState<MusicLibraryTab> {
     final likedSongs = ref.watch(likedSongsProvider);
     final ytLikedSongs = ref.watch(ytMusicLikedSongsProvider).valueOrNull ?? [];
     final recentlyPlayed = ref.watch(recentlyPlayedProvider);
+    final mostPlayed = ref.watch(mostPlayedTracksProvider);
     final downloadedTracks =
         ref.watch(downloadedTracksProvider).valueOrNull ?? [];
     final totalLiked = likedSongs.length + ytLikedSongs.length;
@@ -167,7 +169,7 @@ class _MusicLibraryTabState extends ConsumerState<MusicLibraryTab> {
         'Most Played',
         Icons.bar_chart_rounded,
         Colors.blue,
-        recentlyPlayed.length,
+        mostPlayed.length,
         'most_played',
       ),
       (
@@ -250,7 +252,12 @@ class _MusicLibraryTabState extends ConsumerState<MusicLibraryTab> {
           ytPlaylistsAsync.when(
             data: (playlists) => playlists.isEmpty
                 ? _buildEmptyYTPlaylistsState(isDark, colorScheme)
-                : _buildYTPlaylistsList(playlists, isDark, colorScheme),
+                : _buildYTPlaylistsList(
+                    playlists,
+                    isDark,
+                    colorScheme,
+                    ytLikedSongs.length,
+                  ),
             loading: () => const Center(
               child: Padding(
                 padding: EdgeInsets.all(32),
@@ -291,6 +298,7 @@ class _MusicLibraryTabState extends ConsumerState<MusicLibraryTab> {
     List<Playlist> playlists,
     bool isDark,
     ColorScheme colorScheme,
+    int ytLikedSongsCount,
   ) {
     return ListView.builder(
       shrinkWrap: true,
@@ -299,6 +307,10 @@ class _MusicLibraryTabState extends ConsumerState<MusicLibraryTab> {
       itemCount: playlists.length,
       itemBuilder: (context, index) {
         final playlist = playlists[index];
+        final displayCount = _resolveYtPlaylistSongCount(
+          playlist,
+          ytLikedSongsCount,
+        );
         return ListTile(
           leading: ClipRRect(
             borderRadius: BorderRadius.circular(8),
@@ -329,7 +341,7 @@ class _MusicLibraryTabState extends ConsumerState<MusicLibraryTab> {
             ),
           ),
           subtitle: Text(
-            '${playlist.trackCount ?? 0} songs',
+            '$displayCount songs',
             style: TextStyle(
               fontSize: 12,
               color: isDark ? Colors.white54 : InzxColors.textSecondary,
@@ -348,6 +360,24 @@ class _MusicLibraryTabState extends ConsumerState<MusicLibraryTab> {
         );
       },
     );
+  }
+
+  int _resolveYtPlaylistSongCount(Playlist playlist, int ytLikedSongsCount) {
+    final parsedCount = playlist.trackCount ?? 0;
+    if (parsedCount > 0) return parsedCount;
+
+    final title = playlist.title.toLowerCase();
+    final isLikedPlaylist =
+        playlist.id == 'LM' ||
+        playlist.id == 'VLLM' ||
+        title == 'liked songs' ||
+        title == 'liked music';
+
+    if (isLikedPlaylist && ytLikedSongsCount > 0) {
+      return ytLikedSongsCount;
+    }
+
+    return parsedCount;
   }
 
   Widget _buildEmptyYTPlaylistsState(bool isDark, ColorScheme colorScheme) {
@@ -416,6 +446,15 @@ class _MusicLibraryTabState extends ConsumerState<MusicLibraryTab> {
       return;
     }
 
+    // Liked songs should open the actual liked playlist page.
+    if (type == 'liked') {
+      final ytAuthState = ref.read(ytMusicAuthStateProvider);
+      if (ytAuthState.isLoggedIn) {
+        PlaylistScreen.open(context, playlistId: 'LM', title: title);
+        return;
+      }
+    }
+
     List<Track> tracks = [];
 
     switch (type) {
@@ -426,6 +465,19 @@ class _MusicLibraryTabState extends ConsumerState<MusicLibraryTab> {
         tracks = [...likedSongs, ...ytLikedSongs];
         break;
       case 'most_played':
+        final mostPlayedStats = ref.read(mostPlayedTracksProvider);
+        tracks = mostPlayedStats
+            .map(
+              (s) => Track(
+                id: s.trackId,
+                title: s.title,
+                artist: s.artist,
+                duration: Duration.zero,
+                thumbnailUrl: s.thumbnailUrl,
+              ),
+            )
+            .toList();
+        break;
       case 'recent':
         tracks = ref.read(recentlyPlayedProvider);
         break;

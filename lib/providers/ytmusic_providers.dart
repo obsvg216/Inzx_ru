@@ -1,3 +1,4 @@
+import 'dart:async' show unawaited;
 import 'dart:convert';
 import 'package:flutter/foundation.dart' show compute, kDebugMode;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -275,6 +276,7 @@ class HomePageState {
 class HomePageNotifier extends StateNotifier<HomePageState> {
   final InnerTubeService _innerTube;
   static const String _cacheKey = 'home_page';
+  bool _didAutoLoadMore = false;
 
   HomePageNotifier(this._innerTube) : super(const HomePageState()) {
     loadInitial();
@@ -282,6 +284,7 @@ class HomePageNotifier extends StateNotifier<HomePageState> {
 
   Future<void> loadInitial() async {
     if (state.isLoading) return;
+    _didAutoLoadMore = false;
 
     // Try to load from cache first (stale-while-revalidate)
     final cacheResult = await _loadFromCache();
@@ -313,6 +316,10 @@ class HomePageNotifier extends StateNotifier<HomePageState> {
           );
         }
         _fetchFromNetwork(updateState: true);
+      } else {
+        // Warm up first continuation page so top shelves are fully populated
+        // without waiting for user-initiated scrolling.
+        unawaited(_autoLoadMoreIfNeeded());
       }
       return;
     }
@@ -324,6 +331,7 @@ class HomePageNotifier extends StateNotifier<HomePageState> {
     }
 
     await _fetchFromNetwork(updateState: true);
+    await _autoLoadMoreIfNeeded();
   }
 
   /// Load shelves from Hive cache - returns (shelves, continuationToken)
@@ -416,6 +424,9 @@ class HomePageNotifier extends StateNotifier<HomePageState> {
           fetchedAt: DateTime.now(),
         );
       }
+      if (updateState) {
+        unawaited(_autoLoadMoreIfNeeded());
+      }
       if (kDebugMode) {
         print(
           'Network load complete: ${allShelves.length} shelves, hasMore=${content2.continuationToken != null}',
@@ -484,11 +495,20 @@ class HomePageNotifier extends StateNotifier<HomePageState> {
     if (kDebugMode) {
       print('HomePageNotifier: refresh() called (force network fetch)');
     }
+    _didAutoLoadMore = false;
     // Reset state completely and reload
     state = const HomePageState();
     state = state.copyWith(isLoading: true, hasError: false);
 
     await _fetchFromNetwork(updateState: true);
+  }
+
+  Future<void> _autoLoadMoreIfNeeded() async {
+    if (!mounted || _didAutoLoadMore) return;
+    if (!state.hasMore || state.isLoading || state.isLoadingMore) return;
+
+    _didAutoLoadMore = true;
+    await loadMore();
   }
 }
 
@@ -540,7 +560,22 @@ final ytMusicPlaylistProvider = FutureProvider.family<Playlist?, String>((
       if (kDebugMode) {
         print('ytMusicPlaylistProvider: Loaded $playlistId from cache');
       }
-      return await compute(_parsePlaylistIsolate, cached.playlistJson);
+      final cachedPlaylist = await compute(
+        _parsePlaylistIsolate,
+        cached.playlistJson,
+      );
+
+      // Older builds could cache only the first page (~100 tracks).
+      // Force one network refresh for this suspicious payload shape.
+      if ((cachedPlaylist.tracks?.length ?? 0) == 100) {
+        if (kDebugMode) {
+          print(
+            'ytMusicPlaylistProvider: Cached playlist $playlistId has exactly 100 tracks, refetching to avoid stale truncation',
+          );
+        }
+      } else {
+        return cachedPlaylist;
+      }
     }
   } catch (e) {
     if (kDebugMode) {

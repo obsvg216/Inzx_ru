@@ -2,8 +2,10 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../models/models.dart';
 import '../../../core/design_system/design_system.dart';
 import '../providers/providers.dart';
+import '../providers/bookmarks_and_stats_provider.dart';
 import 'tabs/home_tab.dart';
 import 'tabs/songs_tab.dart';
 import 'tabs/library_tab.dart';
@@ -22,6 +24,7 @@ class MusicApp extends ConsumerStatefulWidget {
 class _MusicAppState extends ConsumerState<MusicApp>
     with SingleTickerProviderStateMixin {
   int _currentIndex = 0;
+  String? _lastTrackedId;
   late AnimationController _animationController;
 
   final List<Widget> _tabs = const [
@@ -55,6 +58,16 @@ class _MusicAppState extends ConsumerState<MusicApp>
 
   @override
   Widget build(BuildContext context) {
+    // Keep stats and recent history in sync with real playback transitions.
+    ref.listen<Track?>(currentTrackProvider, (previous, next) {
+      if (next == null) return;
+      if (_lastTrackedId == next.id) return;
+      _lastTrackedId = next.id;
+
+      ref.read(recentlyPlayedProvider.notifier).addTrack(next);
+      ref.read(playStatisticsProvider.notifier).recordPlay(next);
+    });
+
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final colorScheme = Theme.of(context).colorScheme;
     final playbackState = ref.watch(playbackStateProvider);

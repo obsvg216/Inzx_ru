@@ -1168,11 +1168,20 @@ class InnerTubeService {
         playlistWithContinuation ?? _parsePlaylistDetails(response, playlistId);
     if (playlist == null) return null;
 
-    // Fetch remaining pages if there's a continuation
-    String? nextContinuation = continuation;
+    // Fetch remaining pages if there's a continuation.
+    // Some playlist responses place token outside the parsed shelf node.
+    String? nextContinuation =
+        continuation ??
+        _extractContinuationToken(response['contents']) ??
+        _extractContinuationToken(response['onResponseReceivedActions']) ??
+        _extractContinuationToken(response['onResponseReceivedEndpoints']) ??
+        _extractContinuationToken(response);
     final allTracks = List<Track>.from(playlist.tracks ?? []);
+    final seenTrackIds = allTracks.map((t) => t.id).toSet();
+    final seenContinuations = <String>{};
 
-    while (nextContinuation != null) {
+    while (nextContinuation != null &&
+        seenContinuations.add(nextContinuation)) {
       final contResponse = await _request('browse', {
         'continuation': nextContinuation,
       }, authenticated: isAuthenticated);
@@ -1180,8 +1189,15 @@ class InnerTubeService {
       if (contResponse == null) break;
 
       final (moreTracks, nextCont) = _parsePlaylistContinuation(contResponse);
-      allTracks.addAll(moreTracks);
+      for (final track in moreTracks) {
+        if (seenTrackIds.add(track.id)) {
+          allTracks.add(track);
+        }
+      }
       nextContinuation = nextCont;
+
+      // Safety guard against malformed continuation loops.
+      if (allTracks.length > 5000) break;
     }
 
     return Playlist(
@@ -4007,13 +4023,18 @@ class InnerTubeService {
 
       // Get continuation from shelf
       if (shelf != null) {
-        final continuations = shelf['continuations'] as List?;
-        if (continuations != null && continuations.isNotEmpty) {
-          continuation =
-              continuations[0]['nextContinuationData']?['continuation']
-                  as String?;
-        }
+        continuation = _extractContinuationToken(shelf['continuations']);
       }
+
+      // Some first-page playlist responses keep continuation in item lists
+      // or response wrappers rather than shelf.continuations.
+      continuation ??= _extractContinuationToken(contents);
+      continuation ??= _extractContinuationToken(
+        response['onResponseReceivedActions'],
+      );
+      continuation ??= _extractContinuationToken(
+        response['onResponseReceivedEndpoints'],
+      );
 
       if (contents != null) {
         for (final item in contents) {
@@ -4061,6 +4082,8 @@ class InnerTubeService {
     String? continuation;
 
     try {
+      List? items;
+
       // Try musicPlaylistShelfContinuation
       var continuationContents =
           response['continuationContents']?['musicPlaylistShelfContinuation'];
@@ -4070,25 +4093,75 @@ class InnerTubeService {
           response['continuationContents']?['musicShelfContinuation'];
 
       if (continuationContents != null) {
-        final contents = continuationContents['contents'] as List?;
-        if (contents != null) {
-          for (final item in contents) {
-            final track = _parseTrackItem({
-              'musicResponsiveListItemRenderer':
-                  item['musicResponsiveListItemRenderer'],
+        items = continuationContents['contents'] as List?;
+      }
+
+      // Some playlist continuations return items via appendContinuationItemsAction.
+      items ??=
+          _navigateJson(response, [
+                'onResponseReceivedActions',
+                0,
+                'appendContinuationItemsAction',
+                'continuationItems',
+              ])
+              as List?;
+      items ??=
+          _navigateJson(response, [
+                'onResponseReceivedEndpoints',
+                0,
+                'appendContinuationItemsAction',
+                'continuationItems',
+              ])
+              as List?;
+
+      if (items != null) {
+        for (final item in items) {
+          // Standard continuation item.
+          var track = _parseTrackItem(item);
+          if (track != null) {
+            tracks.add(track);
+            continue;
+          }
+
+          // Wrapped continuation item shape.
+          final renderer = item['musicResponsiveListItemRenderer'];
+          if (renderer != null) {
+            track = _parseTrackItem({
+              'musicResponsiveListItemRenderer': renderer,
             });
-            if (track != null) tracks.add(track);
+            if (track != null) {
+              tracks.add(track);
+              continue;
+            }
+          }
+
+          // Nested shelf continuation shape.
+          final shelfItems =
+              item['musicPlaylistShelfRenderer']?['contents'] as List?;
+          if (shelfItems != null) {
+            for (final shelfItem in shelfItems) {
+              final shelfTrack = _parseTrackItem(shelfItem);
+              if (shelfTrack != null) {
+                tracks.add(shelfTrack);
+              }
+            }
           }
         }
-
-        // Get next continuation
-        final continuations = continuationContents['continuations'] as List?;
-        if (continuations != null && continuations.isNotEmpty) {
-          continuation =
-              continuations[0]['nextContinuationData']?['continuation']
-                  as String?;
-        }
       }
+
+      // Get next continuation token using robust extractor.
+      if (continuationContents != null) {
+        continuation = _extractContinuationToken(
+          continuationContents['continuations'],
+        );
+      }
+      continuation ??= _extractContinuationToken(items);
+      continuation ??= _extractContinuationToken(
+        response['onResponseReceivedActions'],
+      );
+      continuation ??= _extractContinuationToken(
+        response['onResponseReceivedEndpoints'],
+      );
     } catch (e) {
       if (kDebugMode) {
         print('Error parsing playlist continuation: $e');
