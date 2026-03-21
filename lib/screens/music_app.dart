@@ -205,12 +205,12 @@ class _ModernFloatingNavState extends State<_ModernFloatingNav>
   late Animation<double> _bounceAnimation;
   int _previousIndex = 0;
 
-  static const _navItems = [
-    (Icons.home_outlined, Icons.home_rounded, 'Home'),
-    (Icons.music_note_outlined, Icons.music_note_rounded, 'Songs'),
-    (Icons.library_music_outlined, Icons.library_music_rounded, 'Library'),
-    (Icons.folder_outlined, Icons.folder_rounded, 'Folders'),
-  ];
+static const _navItems = [
+  (Icons.home_outlined, Icons.home_rounded, 'Главная'),
+  (Icons.music_note_outlined, Icons.music_note_rounded, 'Треки'),
+  (Icons.library_music_outlined, Icons.library_music_rounded, 'Библиотека'),
+  (Icons.folder_outlined, Icons.folder_rounded, 'Папки'),
+];
 
   @override
   void initState() {
