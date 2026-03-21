@@ -10,7 +10,7 @@ import '../widgets/track_options_sheet.dart';
 import '../widgets/now_playing_screen.dart';
 
 /// Provider that combines all songs from multiple sources
-final allSongsProvider = Provider<List<Track>>((ref) {
+final allSongsProvider = Provider((ref) {
   final recentlyPlayed = ref.watch(recentlyPlayedProvider);
   final likedSongs = ref.watch(likedSongsProvider);
   final localTracks = ref.watch(localTracksProvider);
@@ -23,7 +23,7 @@ final allSongsProvider = Provider<List<Track>>((ref) {
   final ytLikedSongs = ref.watch(ytMusicLikedSongsProvider).valueOrNull ?? [];
 
   // Combine all sources, removing duplicates by ID
-  final allTracks = <String, Track>{};
+  final allTracks = <Track>{};
 
   // Priority: downloaded > local > yt liked > local liked > recently played
   for (final track in recentlyPlayed) {
@@ -51,18 +51,18 @@ class MusicSongsTab extends ConsumerStatefulWidget {
   const MusicSongsTab({super.key});
 
   @override
-  ConsumerState<MusicSongsTab> createState() => _MusicSongsTabState();
+  ConsumerState createState() => _MusicSongsTabState();
 }
 
 class _MusicSongsTabState extends ConsumerState<MusicSongsTab> {
-  String _selectedFilter = 'All';
-  String _sortBy = 'Recently added';
+  String _selectedFilter = 'Все';
+  String _sortBy = 'Недавно добавленные';
   String _searchQuery = '';
   final _searchController = TextEditingController();
   bool _isSearching = false;
 
-  final _filters = ['All', 'Liked', 'Local', 'Downloaded'];
-  final _sortOptions = ['Recently added', 'Name', 'Artist', 'Duration'];
+  final _filters = ['Все', 'Понравившиеся', 'Локальные', 'Скачанные'];
+  final _sortOptions = ['Недавно добавленные', 'Название', 'Исполнитель', 'Длительность'];
 
   @override
   void dispose() {
@@ -75,7 +75,7 @@ class _MusicSongsTabState extends ConsumerState<MusicSongsTab> {
 
     // Apply filter
     switch (_selectedFilter) {
-      case 'Liked':
+      case 'Понравившиеся':
         final likedIds = ref.read(likedSongsProvider).map((t) => t.id).toSet();
         final ytLikedIds =
             (ref.read(ytMusicLikedSongsProvider).valueOrNull ?? [])
@@ -85,11 +85,11 @@ class _MusicSongsTabState extends ConsumerState<MusicSongsTab> {
             .where((t) => likedIds.contains(t.id) || ytLikedIds.contains(t.id))
             .toList();
         break;
-      case 'Local':
+      case 'Локальные':
         final localIds = ref.read(localTracksProvider).map((t) => t.id).toSet();
         tracks = tracks.where((t) => localIds.contains(t.id)).toList();
         break;
-      case 'Downloaded':
+      case 'Скачанные':
         // Only show tracks that have a local file path (downloaded)
         tracks = tracks.where((t) => t.localFilePath != null).toList();
         break;
@@ -110,19 +110,19 @@ class _MusicSongsTabState extends ConsumerState<MusicSongsTab> {
 
     // Apply sort
     switch (_sortBy) {
-      case 'Name':
+      case 'Название':
         tracks.sort((a, b) => a.title.compareTo(b.title));
         break;
-      case 'Artist':
+      case 'Исполнитель':
         tracks.sort((a, b) => a.artist.compareTo(b.artist));
         break;
-      case 'Duration':
+      case 'Длительность':
         tracks.sort(
           (a, b) =>
               a.duration.inMilliseconds.compareTo(b.duration.inMilliseconds),
         );
         break;
-      case 'Recently added':
+      case 'Недавно добавленные':
       default:
         // Keep original order (most recent first)
         break;
@@ -208,7 +208,7 @@ class _MusicSongsTabState extends ConsumerState<MusicSongsTab> {
                         controller: _searchController,
                         autofocus: true,
                         decoration: InputDecoration(
-                          hintText: 'Search songs...',
+                          hintText: 'Поиск треков...',
                           border: InputBorder.none,
                           isDense: true,
                           contentPadding: EdgeInsets.zero,
@@ -232,7 +232,7 @@ class _MusicSongsTabState extends ConsumerState<MusicSongsTab> {
             )
           else
             Text(
-              'Songs',
+              'Треки',
               style: TextStyle(
                 fontSize: 28,
                 fontWeight: FontWeight.bold,
@@ -321,7 +321,7 @@ class _MusicSongsTabState extends ConsumerState<MusicSongsTab> {
           Row(
             children: [
               Text(
-                '$count songs',
+                'Треков: $count',
                 style: TextStyle(
                   fontSize: 13,
                   color: isDark ? Colors.white54 : InzxColors.textSecondary,
@@ -329,7 +329,7 @@ class _MusicSongsTabState extends ConsumerState<MusicSongsTab> {
               ),
             ],
           ),
-          PopupMenuButton<String>(
+          PopupMenuButton(
             onSelected: (value) => setState(() => _sortBy = value),
             offset: const Offset(0, 40),
             shape: RoundedRectangleBorder(
@@ -388,25 +388,25 @@ class _MusicSongsTabState extends ConsumerState<MusicSongsTab> {
     String subMessage;
 
     switch (_selectedFilter) {
-      case 'Liked':
-        message = 'No liked songs';
-        subMessage = 'Like some songs to see them here';
+      case 'Понравившиеся':
+        message = 'Нет понравившихся треков';
+        subMessage = 'Отмечайте треки лайками, чтобы они появились здесь';
         break;
-      case 'Local':
-        message = 'No local songs';
-        subMessage = 'Scan folders to find local music';
+      case 'Локальные':
+        message = 'Нет локальных треков';
+        subMessage = 'Просканируйте папки для поиска локальной музыки';
         break;
-      case 'Downloaded':
-        message = 'No downloads';
-        subMessage = 'Download songs to listen offline';
+      case 'Скачанные':
+        message = 'Нет скачанных треков';
+        subMessage = 'Скачайте треки для прослушивания офлайн';
         break;
       default:
         if (_searchQuery.isNotEmpty) {
-          message = 'No results';
-          subMessage = 'Try different keywords';
+          message = 'Ничего не найдено';
+          subMessage = 'Попробуйте другие ключевые слова';
         } else {
-          message = 'No songs yet';
-          subMessage = 'Play some music to build your library';
+          message = 'Пока нет треков';
+          subMessage = 'Включите музыку, чтобы сформировать библиотеку';
         }
     }
 
@@ -503,7 +503,7 @@ class _MusicSongsTabState extends ConsumerState<MusicSongsTab> {
             child: ElevatedButton.icon(
               onPressed: () => _playAll(tracks),
               icon: const Icon(Icons.play_arrow_rounded),
-              label: const Text('Play all'),
+              label: const Text('Воспроизвести все'),
               style: ElevatedButton.styleFrom(
                 backgroundColor: accentColor,
                 foregroundColor: InzxColors.contrastTextOn(accentColor),
@@ -520,7 +520,7 @@ class _MusicSongsTabState extends ConsumerState<MusicSongsTab> {
             child: OutlinedButton.icon(
               onPressed: () => _shuffleAll(tracks),
               icon: const Icon(Icons.shuffle_rounded),
-              label: const Text('Shuffle'),
+              label: const Text('Перемешать'),
               style: OutlinedButton.styleFrom(
                 foregroundColor: accentColor,
                 padding: const EdgeInsets.symmetric(vertical: 12),
@@ -547,7 +547,7 @@ class _MusicSongsTabState extends ConsumerState<MusicSongsTab> {
     final playbackState = ref.watch(playbackStateProvider);
     final isCurrentTrack =
         playbackState.whenOrNull(data: (s) => s.currentTrack?.id == track.id) ??
-        false;
+            false;
     final isPlaying =
         playbackState.whenOrNull(data: (s) => s.isPlaying) ?? false;
 
@@ -566,9 +566,9 @@ class _MusicSongsTabState extends ConsumerState<MusicSongsTab> {
                       fit: BoxFit.cover,
                       width: 52,
                       height: 52,
-                      placeholder: (_, _) =>
+                      placeholder: (_, __) =>
                           _defaultArtwork(colorScheme, accentColor),
-                      errorWidget: (_, _, _) =>
+                      errorWidget: (_, __, ___) =>
                           _defaultArtwork(colorScheme, accentColor),
                     )
                   : _defaultArtwork(colorScheme, accentColor),
