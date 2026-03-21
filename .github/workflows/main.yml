@@ -23,12 +23,15 @@ jobs:
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.27.0'
+          flutter-version: '3.35.0'
           channel: 'stable'
           cache: true
 
       - name: Check Flutter version
         run: flutter --version
+
+      - name: Check Dart version
+        run: dart --version
 
       - name: Get dependencies
         run: flutter pub get
@@ -59,4 +62,5 @@ jobs:
           echo "## 📦 Сборка завершена!" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "✅ Flutter: $(flutter --version | head -1)" >> $GITHUB_STEP_SUMMARY
+          echo "✅ Dart: $(dart --version)" >> $GITHUB_STEP_SUMMARY
           echo "✅ Дата: $(date)" >> $GITHUB_STEP_SUMMARY
