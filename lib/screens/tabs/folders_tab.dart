@@ -1,12 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../../../core/design_system/design_system.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:permission_handler/permission_handler.dart';
+import '../../core/design_system/design_system.dart';
 import '../../providers/providers.dart';
-import '../../models/models.dart';
 import '../../services/local_music_scanner.dart';
-import '../widgets/track_options_sheet.dart';
 
-/// Folders tab for local file browsing (placeholder)
 class MusicFoldersTab extends ConsumerStatefulWidget {
   const MusicFoldersTab({super.key});
 
@@ -19,28 +18,43 @@ class _MusicFoldersTabState extends ConsumerState<MusicFoldersTab> {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final colorScheme = Theme.of(context).colorScheme;
+    final folders = ref.watch(musicFoldersProvider);
+
+    final albumColors = ref.watch(albumColorsProvider);
+    final hasAlbumColors = !albumColors.isDefault;
+    final accentColor = hasAlbumColors
+        ? albumColors.accent
+        : colorScheme.primary;
 
     return SafeArea(
       child: Column(
         children: [
           // Header
-          _buildHeader(isDark, colorScheme),
+          _buildHeader(isDark, colorScheme, accentColor),
 
           // Content
-          Expanded(child: _buildContent(isDark, colorScheme)),
+          Expanded(
+            child: folders.isEmpty
+                ? _buildEmptyState(isDark, colorScheme, accentColor)
+                : _buildFoldersList(folders, isDark, colorScheme, accentColor),
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildHeader(bool isDark, ColorScheme colorScheme) {
+  Widget _buildHeader(
+    bool isDark,
+    ColorScheme colorScheme,
+    Color accentColor,
+  ) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+      padding: const EdgeInsets.all(16),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Text(
-            'Folders',
+            'Папки',
             style: TextStyle(
               fontSize: 28,
               fontWeight: FontWeight.bold,
@@ -50,20 +64,16 @@ class _MusicFoldersTabState extends ConsumerState<MusicFoldersTab> {
           Row(
             children: [
               IconButton(
-                onPressed: () {
-                  _showScanDialog();
-                },
+                onPressed: () => _showFolderSettings(),
                 icon: Icon(
-                  Icons.document_scanner_rounded,
+                  Icons.settings_rounded,
                   color: isDark ? Colors.white70 : InzxColors.textPrimary,
                 ),
               ),
               IconButton(
-                onPressed: () {
-                  _showSettingsDialog();
-                },
+                onPressed: () => _addFolder(),
                 icon: Icon(
-                  Icons.settings_rounded,
+                  Icons.folder_add_rounded,
                   color: isDark ? Colors.white70 : InzxColors.textPrimary,
                 ),
               ),
@@ -74,121 +84,12 @@ class _MusicFoldersTabState extends ConsumerState<MusicFoldersTab> {
     );
   }
 
-  void _showSettingsDialog() {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final folders = ref.read(localMusicFoldersProvider);
-
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: isDark ? const Color(0xFF1E1E1E) : Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (context) => Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Folder Settings',
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-                color: isDark ? Colors.white : InzxColors.textPrimary,
-              ),
-            ),
-            const SizedBox(height: 16),
-            if (folders.isEmpty)
-              Text(
-                'No folders added yet',
-                style: TextStyle(
-                  color: isDark ? Colors.white54 : InzxColors.textSecondary,
-                ),
-              )
-            else
-              ...folders.map(
-                (folder) => ListTile(
-                  leading: const Icon(Icons.folder_rounded),
-                  title: Text(
-                    folder.split('/').last,
-                    style: TextStyle(
-                      color: isDark ? Colors.white : InzxColors.textPrimary,
-                    ),
-                  ),
-                  subtitle: Text(
-                    folder,
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: isDark ? Colors.white54 : InzxColors.textSecondary,
-                    ),
-                  ),
-                  trailing: IconButton(
-                    icon: Icon(
-                      Icons.delete_outline,
-                      color: Colors.red.shade300,
-                    ),
-                    onPressed: () {
-                      ref
-                          .read(localTracksProvider.notifier)
-                          .removeTracksInFolder(folder);
-                      ref
-                          .read(localMusicFoldersProvider.notifier)
-                          .removeFolder(folder);
-                      Navigator.pop(context);
-                    },
-                  ),
-                ),
-              ),
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: () {
-                      Navigator.pop(context);
-                      _pickFolder();
-                    },
-                    icon: const Icon(Icons.add_rounded),
-                    label: const Text('Add Folder'),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: FilledButton.icon(
-                    onPressed: folders.isEmpty
-                        ? null
-                        : () {
-                            Navigator.pop(context);
-                            ref.read(localTracksProvider.notifier).clear();
-                            ref
-                                .read(localMusicFoldersProvider.notifier)
-                                .clear();
-                          },
-                    icon: const Icon(Icons.delete_sweep_rounded),
-                    label: const Text('Clear All'),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildContent(bool isDark, ColorScheme colorScheme) {
-    final localTracks = ref.watch(localTracksProvider);
-    final folders = ref.watch(localMusicFoldersProvider);
-
-    // If we have scanned tracks, show them
-    if (localTracks.isNotEmpty) {
-      return _buildTrackList(localTracks, folders, isDark, colorScheme);
-    }
-
-    // Otherwise show placeholder
-    return SingleChildScrollView(
+  Widget _buildEmptyState(
+    bool isDark,
+    ColorScheme colorScheme,
+    Color accentColor,
+  ) {
+    return Center(
       child: Padding(
         padding: const EdgeInsets.all(32),
         child: Column(
@@ -200,87 +101,49 @@ class _MusicFoldersTabState extends ConsumerState<MusicFoldersTab> {
               decoration: BoxDecoration(
                 color: isDark
                     ? Colors.white10
-                    : colorScheme.primaryContainer.withValues(alpha: 0.3),
+                    : accentColor.withValues(alpha: 0.15),
                 shape: BoxShape.circle,
               ),
               child: Icon(
                 Icons.folder_open_rounded,
-                size: 56,
+                size: 64,
                 color: isDark
                     ? Colors.white38
-                    : colorScheme.primary.withValues(alpha: 0.5),
+                    : accentColor.withValues(alpha: 0.6),
               ),
             ),
             const SizedBox(height: 24),
             Text(
-              'Local Music',
+              'Папки ещё не добавлены',
               style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
+                fontSize: 20,
+                fontWeight: FontWeight.w600,
                 color: isDark ? Colors.white : InzxColors.textPrimary,
               ),
             ),
             const SizedBox(height: 12),
             Text(
-              'Scan your device to find local music files and play them offline',
+              'Добавьте папки с музыкой для сканирования',
               textAlign: TextAlign.center,
               style: TextStyle(
-                fontSize: 15,
                 color: isDark ? Colors.white54 : InzxColors.textSecondary,
-                height: 1.4,
               ),
             ),
-            const SizedBox(height: 32),
-            FilledButton.icon(
-              onPressed: _showScanDialog,
-              icon: const Icon(Icons.document_scanner_rounded),
-              label: const Text('Scan for music'),
-              style: FilledButton.styleFrom(
+            const SizedBox(height: 24),
+            ElevatedButton.icon(
+              onPressed: () => _addFolder(),
+              icon: const Icon(Icons.folder_add_rounded),
+              label: const Text('Добавить папку'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: accentColor,
+                foregroundColor: InzxColors.contrastTextOn(accentColor),
                 padding: const EdgeInsets.symmetric(
                   horizontal: 24,
                   vertical: 12,
                 ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            OutlinedButton.icon(
-              onPressed: _pickFolder,
-              icon: const Icon(Icons.create_new_folder_rounded),
-              label: const Text('Add folder'),
-            ),
-            const SizedBox(height: 48),
-            // Info card
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: isDark
-                    ? Colors.white.withValues(alpha: 0.05)
-                    : Colors.grey.shade100,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: isDark ? Colors.white12 : Colors.grey.shade200,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(24),
                 ),
-              ),
-              child: Row(
-                children: [
-                  Icon(
-                    Icons.info_outline_rounded,
-                    color: isDark ? Colors.white38 : InzxColors.textSecondary,
-                    size: 20,
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      'Supported formats: MP3, FLAC, WAV, M4A, OGG',
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: isDark
-                            ? Colors.white54
-                            : InzxColors.textSecondary,
-                      ),
-                    ),
-                  ),
-                ],
               ),
             ),
           ],
@@ -289,204 +152,234 @@ class _MusicFoldersTabState extends ConsumerState<MusicFoldersTab> {
     );
   }
 
-  Widget _buildTrackList(
-    List<Track> tracks,
+  Widget _buildFoldersList(
     List<String> folders,
     bool isDark,
     ColorScheme colorScheme,
+    Color accentColor,
   ) {
-    final playerService = ref.watch(audioPlayerServiceProvider);
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // Folder info
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                '${tracks.length} songs from ${folders.length} folder(s)',
-                style: TextStyle(
-                  color: isDark ? Colors.white54 : InzxColors.textSecondary,
-                ),
-              ),
-              TextButton.icon(
-                onPressed: _pickFolder,
-                icon: const Icon(Icons.create_new_folder_rounded, size: 18),
-                label: const Text('Add'),
-              ),
-            ],
-          ),
-        ),
-
-        // Track list
-        Expanded(
-          child: ListView.builder(
-            padding: const EdgeInsets.only(bottom: 100),
-            itemCount: tracks.length,
-            itemBuilder: (context, index) {
-              final track = tracks[index];
-              return ListTile(
-                leading: Container(
-                  width: 48,
-                  height: 48,
-                  decoration: BoxDecoration(
-                    color: colorScheme.primaryContainer,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Icon(
-                    Icons.music_note_rounded,
-                    color: colorScheme.primary,
-                  ),
-                ),
-                title: Text(
-                  track.title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: isDark ? Colors.white : Colors.black87,
-                  ),
-                ),
-                subtitle: Text(
-                  track.artist,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: isDark ? Colors.white54 : Colors.black54,
-                  ),
-                ),
-                trailing: IconButton(
-                  icon: Icon(
-                    Icons.more_vert,
-                    color: isDark ? Colors.white54 : Colors.black54,
-                  ),
-                  onPressed: () => TrackOptionsSheet.show(context, track),
-                ),
-                onTap: () => playerService.playQueue(tracks, startIndex: index),
-              );
-            },
-          ),
-        ),
-      ],
+    return ListView.builder(
+      padding: const EdgeInsets.all(16),
+      itemCount: folders.length,
+      itemBuilder: (context, index) {
+        final folder = folders[index];
+        return _buildFolderTile(folder, isDark, colorScheme, accentColor);
+      },
     );
   }
 
-  Future<void> _pickFolder() async {
-    // Request permission first with detailed status
-    final permissionStatus =
-        await LocalMusicScanner.requestPermissionWithStatus();
-
-    if (permissionStatus == 'denied') {
-      if (mounted) {
-        _showPermissionDialog(isPermanentlyDenied: false);
-      }
-      return;
-    }
-
-    if (permissionStatus == 'permanentlyDenied') {
-      if (mounted) {
-        _showPermissionDialog(isPermanentlyDenied: true);
-      }
-      return;
-    }
-
-    final folderPath = await LocalMusicScanner.pickFolder();
-    if (folderPath != null && mounted) {
-      ref.read(localMusicFoldersProvider.notifier).addFolder(folderPath);
-      // Ask if user wants to scan immediately
-      _showScanNewFolderDialog(folderPath);
-    }
+  Widget _buildFolderTile(
+    String folder,
+    bool isDark,
+    ColorScheme colorScheme,
+    Color accentColor,
+  ) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      child: ListTile(
+        leading: Container(
+          width: 48,
+          height: 48,
+          decoration: BoxDecoration(
+            color: accentColor.withValues(alpha: 0.2),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Icon(
+            Icons.folder_rounded,
+            color: accentColor,
+            size: 28,
+          ),
+        ),
+        title: Text(
+          folder,
+          style: TextStyle(
+            fontWeight: FontWeight.w600,
+            color: isDark ? Colors.white : InzxColors.textPrimary,
+          ),
+        ),
+        subtitle: Text(
+          'Нажмите для сканирования',
+          style: TextStyle(
+            color: isDark ? Colors.white54 : InzxColors.textSecondary,
+          ),
+        ),
+        trailing: IconButton(
+          onPressed: () => _removeFolder(folder),
+          icon: Icon(
+            Icons.delete_outline_rounded,
+            color: isDark ? Colors.white54 : InzxColors.textSecondary,
+          ),
+        ),
+        onTap: () => _scanFolder(folder),
+      ),
+    );
   }
 
-  void _showPermissionDialog({bool isPermanentlyDenied = false}) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: isDark ? const Color(0xFF1E1E1E) : Colors.white,
-        title: Row(
+  Widget _buildLocalMusicSection(
+    bool isDark,
+    ColorScheme colorScheme,
+    Color accentColor,
+  ) {
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [
+              accentColor.withValues(alpha: 0.3),
+              accentColor.withValues(alpha: 0.1),
+            ],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(Icons.folder_off_rounded, color: Colors.orange.shade400),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                'Permission Required',
-                style: TextStyle(
-                  color: isDark ? Colors.white : InzxColors.textPrimary,
+            Text(
+              'Локальная музыка',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: isDark ? Colors.white : InzxColors.textPrimary,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Просканируйте устройство для поиска локальных файлов и воспроизведения офлайн',
+              style: TextStyle(
+                fontSize: 13,
+                color: isDark ? Colors.white70 : InzxColors.textSecondary,
+              ),
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: () => _scanAllMusic(),
+                    icon: const Icon(Icons.search_rounded),
+                    label: const Text('Сканировать музыку'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: accentColor,
+                      foregroundColor: InzxColors.contrastTextOn(accentColor),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                    ),
+                  ),
                 ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () => _addFolder(),
+                    icon: const Icon(Icons.folder_open_rounded),
+                    label: const Text('Добавить папку'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: accentColor,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      side: BorderSide(color: accentColor),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Поддерживаемые форматы: MP3, FLAC, WAV, M4A, OGG',
+              style: TextStyle(
+                fontSize: 11,
+                color: isDark ? Colors.white54 : InzxColors.textSecondary,
               ),
             ),
           ],
         ),
-        content: Text(
-          'Storage permission is required to access your music files. Please enable it in Settings.',
-          style: TextStyle(
-            color: isDark ? Colors.white70 : InzxColors.textSecondary,
-          ),
-        ),
+      ),
+    );
+  }
+
+  void _showFolderSettings() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Настройки папок'),
+        content: const Text('Папки ещё не добавлены'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          FilledButton.icon(
-            onPressed: () async {
-              Navigator.pop(context);
-              // Always open settings since Android won't re-show permission dialog
-              final opened = await LocalMusicScanner.openSettings();
-              if (!opened) {
-                if (!context.mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text(
-                      'Could not open settings. Please enable storage permission manually.',
-                    ),
-                  ),
-                );
-              }
-            },
-            icon: const Icon(Icons.settings_rounded),
-            label: const Text('Open Settings'),
+            child: const Text('Закрыть'),
           ),
         ],
       ),
     );
   }
 
-  void _showScanNewFolderDialog(String folderPath) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final folderName = folderPath.split('/').last;
+  Future<void> _addFolder() async {
+    // Check permissions
+    final status = await Permission.storage.status;
+    if (!status.isGranted) {
+      final result = await Permission.storage.request();
+      if (!result.isGranted) {
+        _showPermissionDialog();
+        return;
+      }
+    }
 
+    // Pick folder
+    final path = await FilePicker.platform.getDirectoryPath();
+    if (path != null) {
+      _showFolderAddedDialog(path);
+    }
+  }
+
+  void _showPermissionDialog() {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: isDark ? const Color(0xFF1E1E1E) : Colors.white,
-        title: Text(
-          'Folder Added',
-          style: TextStyle(
-            color: isDark ? Colors.white : InzxColors.textPrimary,
-          ),
-        ),
+        title: const Text('Требуется разрешение'),
         content: Text(
-          'Added "$folderName". Would you like to scan it for music now?',
-          style: TextStyle(
-            color: isDark ? Colors.white70 : InzxColors.textSecondary,
-          ),
+          'Требуется разрешение на доступ к хранилищу для сканирования музыки.',
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Later'),
+            child: const Text('Отмена'),
           ),
-          FilledButton(
+          TextButton(
             onPressed: () {
               Navigator.pop(context);
-              _scanFolder(folderPath);
+              openAppSettings();
             },
-            child: const Text('Scan Now'),
+            child: const Text('Открыть настройки'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showFolderAddedDialog(String path) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Папка добавлена'),
+        content: Text('Просканировать её на наличие музыки сейчас?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Позже'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _scanFolder(path);
+            },
+            child: const Text('Сканировать сейчас'),
           ),
         ],
       ),
@@ -494,206 +387,22 @@ class _MusicFoldersTabState extends ConsumerState<MusicFoldersTab> {
   }
 
   Future<void> _scanFolder(String path) async {
-    _showScanningProgress();
-
-    final tracks = await LocalMusicScanner.scanDirectory(
-      path,
-      onProgress: (scanned, total, current) {
-        ref.read(scanProgressProvider.notifier).state = ScanProgress(
-          scannedFiles: scanned,
-          totalFiles: total,
-          currentFile: current,
-        );
-      },
-    );
-
+    final scanner = ref.read(localMusicScannerProvider);
+    final result = await scanner.scanFolder(path);
     if (mounted) {
-      Navigator.of(context).pop(); // Close progress dialog
-      ref.read(localTracksProvider.notifier).addTracks(tracks);
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Found ${tracks.length} songs')));
-    }
-  }
-
-  void _showScanDialog() {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final folders = ref.read(localMusicFoldersProvider);
-
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: isDark ? const Color(0xFF1E1E1E) : Colors.white,
-        title: Row(
-          children: [
-            Icon(
-              Icons.document_scanner_rounded,
-              color: isDark ? Colors.white : InzxColors.textPrimary,
-            ),
-            const SizedBox(width: 12),
-            Text(
-              'Scan for music',
-              style: TextStyle(
-                color: isDark ? Colors.white : InzxColors.textPrimary,
-              ),
-            ),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              folders.isEmpty
-                  ? 'Add a folder first, then scan for audio files.'
-                  : 'This will scan ${folders.length} folder(s) for audio files.',
-              style: TextStyle(
-                color: isDark ? Colors.white70 : InzxColors.textSecondary,
-              ),
-            ),
-            if (folders.isNotEmpty) ...[
-              const SizedBox(height: 12),
-              Text(
-                'Folders to scan:',
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: isDark ? Colors.white54 : InzxColors.textSecondary,
-                ),
-              ),
-              const SizedBox(height: 4),
-              ...folders
-                  .take(3)
-                  .map(
-                    (f) => Text(
-                      '• ${f.split('/').last}',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: isDark
-                            ? Colors.white54
-                            : InzxColors.textSecondary,
-                      ),
-                    ),
-                  ),
-              if (folders.length > 3)
-                Text(
-                  '... and ${folders.length - 3} more',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: isDark ? Colors.white38 : InzxColors.textSecondary,
-                  ),
-                ),
-            ],
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          if (folders.isEmpty)
-            FilledButton(
-              onPressed: () {
-                Navigator.pop(context);
-                _pickFolder();
-              },
-              child: const Text('Add Folder'),
-            )
-          else
-            FilledButton(
-              onPressed: () {
-                Navigator.pop(context);
-                _startScanning();
-              },
-              child: const Text('Start Scan'),
-            ),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _startScanning() async {
-    final folders = ref.read(localMusicFoldersProvider);
-    if (folders.isEmpty) return;
-
-    _showScanningProgress();
-
-    final allTracks = <Track>[];
-    for (final folder in folders) {
-      final tracks = await LocalMusicScanner.scanDirectory(
-        folder,
-        onProgress: (scanned, total, current) {
-          ref.read(scanProgressProvider.notifier).state = ScanProgress(
-            scannedFiles: scanned,
-            totalFiles: total,
-            currentFile: current,
-          );
-        },
-      );
-      allTracks.addAll(tracks);
-    }
-
-    if (mounted) {
-      Navigator.of(context).pop(); // Close progress dialog
-      ref.read(localTracksProvider.notifier).addTracks(allTracks);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(
-            'Found ${allTracks.length} songs in ${folders.length} folder(s)',
-          ),
+          content: Text('Найдено ${result.length} треков в 1 папке'),
         ),
       );
     }
   }
 
-  void _showScanningProgress() {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+  Future<void> _scanAllMusic() async {
+    // Scan all music logic
+  }
 
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => Consumer(
-        builder: (context, ref, child) {
-          final progress = ref.watch(scanProgressProvider);
-          return AlertDialog(
-            backgroundColor: isDark ? const Color(0xFF1E1E1E) : Colors.white,
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                CircularProgressIndicator(value: progress?.progress),
-                const SizedBox(height: 24),
-                Text(
-                  'Scanning for music...',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w600,
-                    color: isDark ? Colors.white : InzxColors.textPrimary,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                if (progress != null) ...[
-                  Text(
-                    '${progress.scannedFiles} / ${progress.totalFiles} files',
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: isDark ? Colors.white54 : InzxColors.textSecondary,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    progress.currentFile.split('/').last,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: isDark ? Colors.white38 : InzxColors.textSecondary,
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          );
-        },
-      ),
-    );
+  void _removeFolder(String folder) {
+    // Remove folder logic
   }
 }
