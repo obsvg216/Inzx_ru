@@ -123,7 +123,6 @@ class NowPlayingScreen extends ConsumerStatefulWidget {
               ).animate(
                 CurvedAnimation(parent: animation, curve: Curves.easeOutCubic),
               );
-
           return SlideTransition(position: slideAnimation, child: child);
         },
         transitionDuration: const Duration(milliseconds: 350),
@@ -219,7 +218,6 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
             (_albumArtPageController.page ?? currentQueueIndex.toDouble())
                 .round();
         if (activePage == currentQueueIndex) return;
-
         _isAlbumSwipeNavigationInProgress = true;
         unawaited(
           _albumArtPageController
@@ -252,7 +250,6 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
     final isNewTrack = trackId != _lastLyricsTrackId && currentTrack != null;
     if (isNewTrack) {
       _lastLyricsTrackId = trackId;
-
       // Fetch lyrics for new track
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
@@ -274,7 +271,6 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
     // Animate when new colors arrive (not default)
     if (albumColors != _targetColors && !albumColors.isDefault) {
       _targetColors = albumColors;
-
       // Start animation from current to target
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
@@ -299,7 +295,6 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
         if (state.currentTrack == null) {
           return const SizedBox.shrink();
         }
-
         final track = state.currentTrack!;
 
         // SOLID colors - no translucency
@@ -396,16 +391,13 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
       children: [
         // Top bar
         _buildTopBar(textColor, secondaryTextColor),
-
         // Album art
         _buildAlbumArt(track, accentColor),
-
         Expanded(
           child: Column(
             children: [
               // Current synced lyric line (shown only when synced lyrics are available)
               _buildSyncedLyricPreview(textColor),
-
               // Track info
               _buildTrackInfo(
                 track,
@@ -413,7 +405,6 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
                 secondaryTextColor,
                 accentColor,
               ),
-
               // Progress bar
               _NowPlayingProgressBar(
                 duration: state.duration,
@@ -421,15 +412,11 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
                 secondaryColor: secondaryTextColor,
                 accentColor: accentColor,
               ),
-
               // Controls
               _buildControls(state, playerService, textColor, accentColor),
-
               const Spacer(),
-
               // Bottom tabs
               _buildBottomTabs(textColor, accentColor),
-
               SizedBox(height: MediaQuery.of(context).padding.bottom),
             ],
           ),
@@ -532,13 +519,13 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
     String queueLabel;
     IconData? queueIcon;
     if (isInJam) {
-      queueLabel = 'Jam Queue';
+      queueLabel = 'Очередь Jams';
       queueIcon = Iconsax.profile_2user;
     } else if (isRadioMode) {
-      queueLabel = 'Radio Queue';
+      queueLabel = 'Радио очередь';
       queueIcon = Icons.all_inclusive;
     } else {
-      queueLabel = 'Queue';
+      queueLabel = 'Очередь';
       queueIcon = null;
     }
 
@@ -570,7 +557,7 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Playing from',
+                    'Воспроизведение из',
                     style: TextStyle(fontSize: 12, color: secondaryColor),
                   ),
                   const SizedBox(height: 4),
@@ -602,12 +589,11 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
                     size: 18,
                     color: textColor,
                   ),
-                  label: Text('Save', style: TextStyle(color: textColor)),
+                  label: Text('Сохранить', style: TextStyle(color: textColor)),
                 ),
             ],
           ),
         ),
-
         // Queue list - ReorderableListView with optimizations
         // Wrap with NotificationListener to detect scroll for infinite radio
         Expanded(
@@ -616,7 +602,6 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
               // Read current state at notification time, not captured build time values
               final currentIsRadioMode = ref.read(isRadioModeProvider);
               final currentIsFetching = ref.read(isFetchingRadioProvider);
-
               // Check if near bottom and radio mode is on
               if (currentIsRadioMode && !currentIsFetching) {
                 final metrics = notification.metrics;
@@ -673,7 +658,7 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
                                 ),
                                 const SizedBox(width: 12),
                                 Text(
-                                  'Loading more tracks...',
+                                  'Загрузка треков...',
                                   style: TextStyle(
                                     color: secondaryColor,
                                     fontSize: 14,
@@ -691,7 +676,7 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
                                 ),
                                 const SizedBox(width: 8),
                                 Text(
-                                  'Scroll for more',
+                                  'Прокрутите для большего',
                                   style: TextStyle(
                                     color: secondaryColor,
                                     fontSize: 14,
@@ -702,10 +687,8 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
                     ),
                   );
                 }
-
                 final track = queue[index];
                 final isCurrent = currentTrack?.id == track.id;
-
                 return RepaintBoundary(
                   key: ValueKey(track.id + index.toString()),
                   child: SizedBox(
@@ -782,7 +765,7 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
       final participant = session?.participants
           .where((p) => p.id == oderId)
           .firstOrNull;
-      return participant?.name ?? 'Someone';
+      return participant?.name ?? 'Кто-то';
     }
 
     return Column(
@@ -798,7 +781,7 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Playing from',
+                    'Воспроизведение из',
                     style: TextStyle(fontSize: 12, color: secondaryColor),
                   ),
                   const SizedBox(height: 4),
@@ -822,13 +805,12 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
               ),
               // Show track count
               Text(
-                '${jamQueue.length} tracks',
+                '${jamQueue.length} треков',
                 style: TextStyle(color: secondaryColor, fontSize: 12),
               ),
             ],
           ),
         ),
-
         // Jam queue list
         Expanded(
           child: jamQueue.isEmpty
@@ -839,12 +821,12 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
                       Icon(Iconsax.music, size: 48, color: secondaryColor),
                       const SizedBox(height: 16),
                       Text(
-                        'No tracks in queue',
+                        'Нет треков в очереди',
                         style: TextStyle(color: secondaryColor),
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        'Add songs to the jam queue',
+                        'Добавьте песни в очередь Jams',
                         style: TextStyle(color: secondaryColor, fontSize: 12),
                       ),
                     ],
@@ -858,14 +840,13 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
                   itemCount: jamQueue.length,
                   onReorder: canControlPlayback
                       ? (oldIndex, newIndex) =>
-                            _reorderJamQueue(oldIndex, newIndex)
+                          _reorderJamQueue(oldIndex, newIndex)
                       : (_, _) {},
                   buildDefaultDragHandles: false,
                   itemBuilder: (context, index) {
                     final queueItem = jamQueue[index];
                     final track = queueItem.track;
                     final addedByName = getAddedByName(queueItem.addedBy);
-
                     return RepaintBoundary(
                       key: ValueKey('jam_${track.videoId}_$index'),
                       child: SizedBox(
@@ -895,7 +876,7 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
                             style: TextStyle(color: textColor),
                           ),
                           subtitle: Text(
-                            '${track.artist} • Added by $addedByName',
+                            '${track.artist} • Добавил(а) $addedByName',
                             maxLines: 1,
                             style: TextStyle(
                               color: secondaryColor,
@@ -950,14 +931,11 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
   void _playFromJamQueue(int index) async {
     final jamsService = ref.read(jamsServiceProvider);
     if (jamsService == null) return;
-
     final jamQueue = ref.read(jamQueueProvider);
     if (index >= jamQueue.length) return;
-
     // Get the track at this index and remove all items up to and including it
     final queueItem = await jamsService.playFromQueueAt(index);
     if (queueItem == null) return;
-
     // Convert to Track and play
     final track = Track(
       id: queueItem.track.videoId,
@@ -966,7 +944,6 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
       thumbnailUrl: queueItem.track.thumbnailUrl,
       duration: Duration(milliseconds: queueItem.track.durationMs),
     );
-
     // Play the track (host's sync will update participants)
     ref.read(audioPlayerServiceProvider).playTrack(track);
   }
@@ -1007,14 +984,12 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
     if (currentTrack == null) {
       return Center(
         child: Text(
-          'No track playing',
+          'Нет воспроизводимого трека',
           style: TextStyle(color: secondaryColor),
         ),
       );
     }
-
     final ytService = ref.watch(youtubeServiceProvider);
-
     // Cache the future to prevent re-fetching on every rebuild
     if (_lastRelatedTrackId != currentTrack.id) {
       _lastRelatedTrackId = currentTrack.id;
@@ -1023,14 +998,12 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
         limit: 20,
       );
     }
-
     return FutureBuilder<List<Track>>(
       future: _relatedTracksFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
         }
-
         if (snapshot.hasError || !snapshot.hasData || snapshot.data!.isEmpty) {
           return Center(
             child: Column(
@@ -1039,16 +1012,14 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
                 Icon(Iconsax.music_filter, size: 48, color: secondaryColor),
                 const SizedBox(height: 12),
                 Text(
-                  'No related tracks found',
+                  'Похожие треки не найдены',
                   style: TextStyle(color: secondaryColor),
                 ),
               ],
             ),
           );
         }
-
         final relatedTracks = snapshot.data!;
-
         return ListView.builder(
           physics: const BouncingScrollPhysics(
             parent: AlwaysScrollableScrollPhysics(),
@@ -1118,20 +1089,18 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
     if (queue.isEmpty) {
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('Queue is empty')));
+      ).showSnackBar(const SnackBar(content: Text('Очередь пуста')));
       return;
     }
-
-    final controller = TextEditingController(text: 'My Queue');
+    final controller = TextEditingController(text: 'Моя очередь');
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final backgroundColor = isDark ? const Color(0xFF1E1E1E) : Colors.white;
-
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: backgroundColor,
         title: Text(
-          'Save Queue as Playlist',
+          'Сохранить очередь как плейлист',
           style: TextStyle(color: textColor),
         ),
         content: TextField(
@@ -1139,7 +1108,7 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
           autofocus: true,
           style: TextStyle(color: textColor),
           decoration: InputDecoration(
-            hintText: 'Playlist name',
+            hintText: 'Название плейлиста',
             hintStyle: TextStyle(color: textColor.withValues(alpha: 0.5)),
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
           ),
@@ -1148,7 +1117,7 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
           TextButton(
             onPressed: () => Navigator.pop(context),
             child: Text(
-              'Cancel',
+              'Отмена',
               style: TextStyle(color: textColor.withValues(alpha: 0.7)),
             ),
           ),
@@ -1171,12 +1140,12 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
                 Navigator.pop(context);
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
-                    content: Text('Saved ${queue.length} tracks to "$name"'),
+                    content: Text('Сохранено ${queue.length} треков в "$name"'),
                   ),
                 );
               }
             },
-            child: const Text('Save'),
+            child: const Text('Сохранить'),
           ),
         ],
       ),
@@ -1200,7 +1169,7 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
           Column(
             children: [
               Text(
-                'NOW PLAYING',
+                'СЕЙЧАС ИГРАЕТ',
                 style: TextStyle(
                   fontSize: 11,
                   fontWeight: FontWeight.w600,
@@ -1240,18 +1209,15 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
     final playerService = ref.watch(audioPlayerServiceProvider);
     final queue = playerService.queue;
     final currentIndex = playerService.currentIndex;
-
     return LayoutBuilder(
       builder: (context, constraints) {
         final screenWidth = MediaQuery.of(context).size.width;
         final maxHeight = MediaQuery.of(context).size.height * 0.42;
-
         // Constrain to max height while staying square
         final artSize = math.min(
           screenWidth - 54, // horizontal padding * 2
           maxHeight,
         );
-
         return SizedBox(
           height: maxHeight,
           child: Align(
@@ -1280,11 +1246,10 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
                       itemBuilder: (context, pageIndex) {
                         final displayTrack =
                             (queue.isNotEmpty &&
-                                pageIndex >= 0 &&
-                                pageIndex < queue.length)
-                            ? queue[pageIndex]
-                            : track;
-
+                                    pageIndex >= 0 &&
+                                    pageIndex < queue.length)
+                                ? queue[pageIndex]
+                                : track;
                         return AnimatedBuilder(
                           animation: _albumArtPageController,
                           builder: (context, child) {
@@ -1295,18 +1260,17 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
                                 ? (_albumArtPageController.page ?? fallbackPage)
                                 : fallbackPage;
                             final delta = (pageIndex - page).abs().clamp(
-                              0.0,
-                              1.0,
-                            );
+                                  0.0,
+                                  1.0,
+                                );
                             final scale = (1.0 - (delta * 0.08)).clamp(
-                              0.92,
-                              1.0,
-                            );
+                                  0.92,
+                                  1.0,
+                                );
                             final opacity = (1.0 - (delta * 0.28)).clamp(
-                              0.72,
-                              1.0,
-                            );
-
+                                  0.72,
+                                  1.0,
+                                );
                             return Transform.scale(
                               scale: scale.toDouble(),
                               child: Opacity(
@@ -1389,25 +1353,21 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
         );
       }
     }
-
     final rawThumbnail = displayTrack?.thumbnailUrl?.trim();
     if (rawThumbnail == null || rawThumbnail.isEmpty) {
       return _defaultArt(accentColor);
     }
-
     final candidates = <String>[];
     final highResFromTrack = displayTrack?.highResThumbnailUrl?.trim();
     if (highResFromTrack != null && highResFromTrack.isNotEmpty) {
       candidates.add(highResFromTrack);
     }
-
     // Try an upgraded thumbnail first for now playing, then fallback to original.
     final upgradedThumbnail = rawThumbnail.replaceAll('w120-h120', 'w600-h600');
     if (upgradedThumbnail.isNotEmpty) {
       candidates.add(upgradedThumbnail);
     }
     candidates.add(rawThumbnail);
-
     final uniqueCandidates = <String>[];
     for (final url in candidates) {
       if (url.isEmpty) continue;
@@ -1415,13 +1375,11 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
         uniqueCandidates.add(url);
       }
     }
-
     return _buildAlbumArtWithFallback(uniqueCandidates, accentColor);
   }
 
   Widget _buildAlbumArtWithFallback(List<String> urls, Color accentColor) {
     if (urls.isEmpty) return _defaultArt(accentColor);
-
     Widget buildAt(int index) {
       if (index >= urls.length) return _defaultArt(accentColor);
       return CachedNetworkImage(
@@ -1432,23 +1390,19 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
         errorWidget: (context, url, error) => buildAt(index + 1),
       );
     }
-
     return buildAt(0);
   }
 
   Widget _buildSyncedLyricPreview(Color textColor) {
     final lyricsState = ref.watch(lyricsProvider);
     final result = lyricsState.currentLyrics;
-
     if (result == null || !result.hasSyncedLyrics) {
       return const SizedBox(height: _syncedLyricPreviewHeight);
     }
-
     final position =
         ref.watch(positionStreamProvider).valueOrNull ?? Duration.zero;
     final positionMs = position.inMilliseconds;
     final lines = result.lines!;
-
     int currentIdx = -1;
     for (int i = 0; i < lines.length; i++) {
       if (lines[i].timeInMs <= positionMs) {
@@ -1457,16 +1411,13 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
         break;
       }
     }
-
     if (currentIdx < 0) {
       return const SizedBox(height: _syncedLyricPreviewHeight);
     }
-
     final text = lines[currentIdx].text.trim();
     if (text.isEmpty) {
       return const SizedBox(height: _syncedLyricPreviewHeight);
     }
-
     return SizedBox(
       height: _syncedLyricPreviewHeight,
       child: Padding(
@@ -1544,7 +1495,6 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
                         maxLines: 1,
                         textDirection: TextDirection.ltr,
                       )..layout();
-
                       // Only use marquee if text overflows
                       if (textPainter.width > constraints.maxWidth) {
                         return Marquee(
@@ -1595,7 +1545,6 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
                         maxLines: 1,
                         textDirection: TextDirection.ltr,
                       )..layout();
-
                       // Only use marquee if text overflows
                       if (textPainter.width > constraints.maxWidth) {
                         return Marquee(
@@ -1630,7 +1579,6 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
               final progress = ref.watch(
                 trackDownloadProgressProvider(track.id),
               );
-
               if (isDownloaded) {
                 return Padding(
                   padding: const EdgeInsets.only(right: 4),
@@ -1641,7 +1589,6 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
                   ),
                 );
               }
-
               if (progress != null) {
                 return Padding(
                   padding: const EdgeInsets.only(right: 4),
@@ -1656,7 +1603,6 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
                   ),
                 );
               }
-
               return const SizedBox.shrink();
             },
           ),
@@ -1683,7 +1629,6 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
                               state.where((id) => id != track.id).toSet(),
                         );
                   }
-
                   // Also sync to YT Music if logged in
                   final authState = ref.read(ytMusicAuthStateProvider);
                   if (authState.isLoggedIn) {
@@ -1728,7 +1673,6 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
   Widget _buildJamsButton(Color textColor, Color accentColor) {
     final isInSession = ref.watch(isInJamSessionProvider);
     final session = ref.watch(currentJamSessionProvider).valueOrNull;
-
     return Stack(
       children: [
         IconButton(
@@ -1807,7 +1751,6 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
     final canControl = ref.watch(canControlJamPlaybackProvider);
     final canSkip =
         !isInJam || canControl; // Can skip if not in Jam or has permission
-
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 24),
       child: Row(
@@ -1885,7 +1828,6 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
   Widget _buildBottomTabs(Color textColor, Color accentColor) {
     // Only show active tab styling when drawer is expanded
     final showActiveState = _isDrawerExpanded;
-
     return TabBar(
       controller: _tabController,
       // Label color - all same when collapsed, accent when expanded
@@ -1908,9 +1850,9 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
         letterSpacing: 0.5,
       ),
       tabs: const [
-        Tab(text: 'UP NEXT'),
-        Tab(text: 'LYRICS'),
-        Tab(text: 'RELATED'),
+        Tab(text: 'ДАЛЕЕ'),
+        Tab(text: 'ТЕКСТ'),
+        Tab(text: 'ПОХОЖИЕ'),
       ],
       onTap: (index) {
         setState(() {
